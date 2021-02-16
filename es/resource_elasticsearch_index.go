@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
@@ -20,15 +21,49 @@ var (
 		"codec",
 		"routing_partition_size",
 		"load_fixed_bitset_filters_eagerly",
+		"shard.check_on_startup",
 	}
 	dynamicsSettingsKeys = []string{
 		"number_of_replicas",
 		"auto_expand_replicas",
 		"refresh_interval",
-		//"max_result_window"
-		//"max_inner_result_window"
-		//"max_rescore_window"
-		//...
+		"search.idle.after",
+		"max_result_window",
+		"max_inner_result_window",
+		"max_rescore_window",
+		"max_docvalue_fields_search",
+		"max_script_fields",
+		"max_ngram_diff",
+		"max_shingle_diff",
+		"blocks_read_only",
+		"blocks.read_only_allow_delete",
+		"blocks.read",
+		"blocks.write",
+		"blocks.metadata",
+		"max_refresh_listeners",
+		"analyze.max_token_count",
+		"highlight.max_analyzed_offset",
+		"max_terms_count",
+		"max_regex_length",
+		"routing.allocation.enable",
+		"routing.rebalance.enable",
+		"gc_deletes",
+		"default_pipeline",
+		"search.slowlog.threshold.query.warn",
+		"search.slowlog.threshold.query.info",
+		"search.slowlog.threshold.query.debug",
+		"search.slowlog.threshold.query.trace",
+		"search.slowlog.threshold.fetch.warn",
+		"search.slowlog.threshold.fetch.info",
+		"search.slowlog.threshold.fetch.debug",
+		"search.slowlog.threshold.fetch.trace",
+		"search.slowlog.level",
+		"indexing.slowlog.threshold.index.warn",
+		"indexing.slowlog.threshold.index.info",
+		"indexing.slowlog.threshold.index.debug",
+		"indexing.slowlog.threshold.index.trace",
+		"indexing.slowlog.level",
+		"indexing.slowlog.source",
 	}
 	settingsKeys = append(staticSettingsKeys, dynamicsSettingsKeys...)
 )
@@ -51,24 +86,33 @@ var (
 		"number_of_shards": {
 			Type:        schema.TypeString,
 			Description: "Number of shards for the index",
-			ForceNew:    true, // shards can only set upon creation
+			ForceNew:    true,
 			Default:     "1",
 			Optional:    true,
 		},
 		"routing_partition_size": {
-			Type:     schema.TypeInt,
-			ForceNew: true, // shards can only set upon creation
-			Optional: true,
+			Type:        schema.TypeInt,
+			Description: "The number of shards a custom routing value can go to. This can be set only on creation.",
+			ForceNew:    true,
+			Optional:    true,
 		},
 		"load_fixed_bitset_filters_eagerly": {
-			Type:     schema.TypeBool,
-			ForceNew: true,
-			Optional: true,
+			Type:        schema.TypeBool,
+			Description: "Indicates whether cached filters are pre-loaded for nested queries.",
+			ForceNew:    true,
+			Optional:    true,
 		},
 		"codec": {
-			Type:     schema.TypeString,
-			ForceNew: true,
-			Optional: true,
+			Type:        schema.TypeString,
+			Description: "The `default` value compresses stored data with LZ4 compression, but this can be set to `best_compression` which uses DEFLATE for a higher compression ratio.",
+			ForceNew:    true,
+			Optional:    true,
+		},
+		"shard_check_on_startup": {
+			Type:        schema.TypeString,
+			Description: "Whether or not shards should be checked for corruption before opening. When corruption is detected, it will prevent the shard from being opened. Accepts `false`, `true`, `checksum`.",
+			ForceNew:    true,
+			Optional:    true,
 		},
 		// Dynamic settings that can be changed at runtime
 		"number_of_replicas": {
@@ -82,8 +126,194 @@ var (
 			Optional:    true,
 		},
 		"refresh_interval": {
-			Type:     schema.TypeString, // -1 to disable
-			Optional: true,
+			Type:        schema.TypeString,
+			Description: "How often to perform a refresh operation, which makes recent changes to the index visible to search. Can be set to `-1` to disable refresh.",
+			Optional:    true,
+		},
+		"search_idle_after": {
+			Type:        schema.TypeInt,
+			Description: "",
+			Optional:    true,
+		},
+		"max_result_window": {
+			Type:        schema.TypeInt,
+			Description: "",
+			Optional:    true,
+		},
+		"max_inner_result_window": {
+			Type:        schema.TypeInt,
+			Description: "",
+			Optional:    true,
+		},
+		"max_rescore_window": {
+			Type:        schema.TypeInt,
+			Description: "",
+			Optional:    true,
+		},
+		"max_docvalue_fields_search": {
+			Type:        schema.TypeInt,
+			Description: "",
+			Optional:    true,
+		},
+		"max_script_fields": {
+			Type:        schema.TypeInt,
+			Description: "",
+			Optional:    true,
+		},
+		"max_ngram_diff": {
+			Type:        schema.TypeInt,
+			Description: "",
+			Optional:    true,
+		},
+		"max_shingle_diff": {
+			Type:        schema.TypeInt,
+			Description: "",
+			Optional:    true,
+		},
+		"max_refresh_listeners": {
+			Type:        schema.TypeInt,
+			Description: "",
+			Optional:    true,
+		},
+		"analyze_max_token_count": {
+			Type:        schema.TypeInt,
+			Description: "",
+			Optional:    true,
+		},
+		"highlight_max_analyzed_offset": {
+			Type:        schema.TypeInt,
+			Description: "",
+			Optional:    true,
+		},
+		"max_terms_count": {
+			Type:        schema.TypeInt,
+			Description: "",
+			Optional:    true,
+		},
+		"max_regex_length": {
+			Type:        schema.TypeInt,
+			Description: "",
+			Optional:    true,
+		},
+		"blocks_read_only": {
+			Type:        schema.TypeBool,
+			Description: "",
+			Optional:    true,
+		},
+		"blocks_read_only_allow_delete": {
+			Type:        schema.TypeBool,
+			Description: "",
+			Optional:    true,
+		},
+		"blocks_read": {
+			Type:        schema.TypeBool,
+			Description: "",
+			Optional:    true,
+		},
+		"blocks_write": {
+			Type:        schema.TypeBool,
+			Description: "",
+			Optional:    true,
+		},
+		"blocks_metadata": {
+			Type:        schema.TypeBool,
+			Description: "",
+			Optional:    true,
+		},
+		"routing_allocation_enable": {
+			Type:        schema.TypeString,
+			Description: "",
+			Optional:    true,
+		},
+		"routing_rebalance_enable": {
+			Type:        schema.TypeString,
+			Description: "",
+			Optional:    true,
+		},
+		"gc_deletes": {
+			Type:        schema.TypeString,
+			Description: "",
+			Optional:    true,
+		},
+		"default_pipeline": {
+			Type:        schema.TypeString,
+			Description: "",
+			Optional:    true,
+		},
+		"search_slowlog_threshold.query.warn": {
+			Type:        schema.TypeString,
+			Description: "",
+			Optional:    true,
+		},
+		"search_slowlog_threshold.query.info": {
+			Type:        schema.TypeString,
+			Description: "",
+			Optional:    true,
+		},
+		"search_slowlog_threshold_query_debug": {
+			Type:        schema.TypeString,
+			Description: "",
+			Optional:    true,
+		},
+		"search_slowlog_threshold_query_trace": {
+			Type:        schema.TypeString,
+			Description: "",
+			Optional:    true,
+		},
+		"search_slowlog_threshold_fetch_warn": {
+			Type:        schema.TypeString,
+			Description: "",
+			Optional:    true,
+		},
+		"search_slowlog_threshold_fetch_info": {
+			Type:        schema.TypeString,
+			Description: "",
+			Optional:    true,
+		},
+		"search_slowlog_threshold_fetch_debug": {
+			Type:        schema.TypeString,
+			Description: "",
+			Optional:    true,
+		},
+		"search_slowlog_threshold_fetch_trace": {
+			Type:        schema.TypeString,
+			Description: "",
+			Optional:    true,
+		},
+		"search_slowlog_level": {
+			Type:        schema.TypeString,
+			Description: "",
+			Optional:    true,
+		},
+		"indexing_slowlog_threshold_index_warn": {
+			Type:        schema.TypeString,
+			Description: "",
+			Optional:    true,
+		},
+		"indexing_slowlog_threshold_index_info": {
+			Type:        schema.TypeString,
+			Description: "",
+			Optional:    true,
+		},
+		"indexing_slowlog_threshold_index_debug": {
+			Type:        schema.TypeString,
+			Description: "",
+			Optional:    true,
+		},
+		"indexing_slowlog_threshold_index_trace": {
+			Type:        schema.TypeString,
+			Description: "",
+			Optional:    true,
+		},
+		"indexing_slowlog_level": {
+			Type:        schema.TypeString,
+			Description: "",
+			Optional:    true,
+		},
+		"indexing_slowlog_source": {
+			Type:        schema.TypeString,
+			Description: "",
+			Optional:    true,
 		},
 		// Other attributes
 		"mappings": {
@@ -202,7 +432,8 @@ func resourceElasticsearchIndexCreate(d *schema.ResourceData, meta interface{}) 
 func settingsFromIndexResourceData(d *schema.ResourceData) map[string]interface{} {
 	settings := make(map[string]interface{})
 	for _, key := range settingsKeys {
-		if raw, ok := d.GetOk(key); ok {
+		schemaName := strings.Replace(key, ".", "_", -1)
+		if raw, ok := d.GetOk(schemaName); ok {
 			settings[key] = raw
 		}
 	}
@@ -211,7 +442,8 @@ func settingsFromIndexResourceData(d *schema.ResourceData) map[string]interface{
 
 func indexResourceDataFromSettings(settings map[string]interface{}, d *schema.ResourceData) {
 	for _, key := range settingsKeys {
-		err := d.Set(key, settings[key])
+		schemaName := strings.Replace(key, ".", "_", -1)
+		err := d.Set(schemaName, settings[key])
 		if err != nil {
 			log.Printf("[INFO] indexResourceDataFromSettings: %+v", err)
 		}
@@ -303,7 +535,7 @@ func resourceElasticsearchIndexUpdate(d *schema.ResourceData, meta interface{}) 
 	}
 
 	body := map[string]interface{}{
-		"settings": settings,
+		"settings": settings, // should this be index? https://github.com/olivere/elastic/blob/21064b90616b5e9a45df8c406b222d46cad5b14b/indices_put_settings_test.go#L48-L50
 	}
 
 	var (
